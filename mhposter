@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import time
+
+spooldir = '/home/sss/Mail/spool'
+
+def writefile():
+    basename = os.path.basename (sys.argv[-1])
+    args = ' '.join (sys.argv[1:])
+    argfile = spooldir + '/' + basename
+    if os.path.exists (argfile + '-tosend'):
+       print ('send file already exists', file=sys.stderr)
+       sys.exit(1)
+    f = open(argfile, 'x')
+    f.write (args + '\n')
+    f.close()
+    os.rename (argfile, argfile + '-tosend')
+    return argfile
+
+
+def handledone (donefile):
+    #print ('done', donefile)
+    f = open(donefile)
+    l = f.readline().strip()
+    if not l:
+        print ('bad donefile', donefile, file=sys.stderr)
+        return 1
+    try:
+        stat = int(l)
+    except ValueError:
+        print ('bad donefile', donefile, file=sys.stderr)
+        return 1
+
+    stdout = []
+    while True:
+        l = f.readline().strip()
+        if not l:
+            print ('bad donefile', donefile, file=sys.stderr)
+            return 1
+        if l == '!STDERR':
+            break
+        stdout.append (l + '\n')
+
+    stderr = []
+    while True:
+        l = f.readline().strip()
+        if not l: break
+        stdout.append (l + '\n')
+
+    if stdout: print (''.join (stdout), end='')
+    if stderr: print (''.join (stderr), end='', file=sys.stderr)
+
+    os.remove (donefile)
+        
+    return stat
+
+
+def waitfile (argfile):
+    donefile = argfile + '-done'
+    ntries = 0
+    while not os.path.exists (donefile):
+        time.sleep (0.1)
+        ntries += 1
+        if ntries > 300*10:
+            print ('Timeout', file=sys.stderr)
+            sys.exit(1)
+    return handledone (donefile)
+
+
+argfile = writefile()
+stat = waitfile (argfile)
+sys.exit (stat)

@@ -1,0 +1,62 @@
+#!/usr/bin/env python
+
+import pyinotify
+import subprocess
+import os
+import glob
+
+spooldir = '/home/sss/Mail/spool'
+postbin = '/usr/libexec/nmh/post'
+#postbin = '/home/sss/oauth/posttest'
+
+import getpass
+password = getpass.getpass ('Password: ')
+
+wm = pyinotify.WatchManager()
+
+mask = pyinotify.IN_CREATE | pyinotify.IN_MOVED_TO
+
+
+def handle_file (f):
+    if f.endswith ('-tosend'):
+        if not os.path.exists (f): return
+        fbase = f[:-7]
+        args = open(f).read().strip()
+        cp = subprocess.run ([postbin] + args.split(), capture_output = True, text = True, input = 'foobar')
+        print (postbin + ' ' + args, '->', cp.returncode)
+        fout = open(fbase + '-temp', 'w')
+        print (cp.returncode, file=fout)
+        print (cp.stdout, file=fout, end='')
+        print ('!STDERR', file=fout)
+        print (cp.stderr, file=fout, end='')
+        fout.close()
+        os.remove (f)
+        os.rename (fbase + '-temp', fbase + '-done')
+    return
+
+class EventHandler(pyinotify.ProcessEvent):
+    def process_IN_CREATE(self, event):
+        return handle_file (event.pathname)
+    def process_IN_MOVED_TO(self, event):
+        return handle_file (event.pathname)
+
+
+handler = EventHandler()
+notifier = pyinotify.Notifier(wm, handler)
+
+def process_files():
+    for f in glob.glob (spooldir + '/*-tosend'):
+        handle_file(f)
+    return
+
+ 
+wdd = wm.add_watch(spooldir, mask, rec=True)
+process_files()
+
+#fm = subprocess.Popen (['/usr/bin/fetchmail', '-vN'],
+#                       stdin = subprocess.PIPE,
+#                       text = True)
+#fm.stdin.write (password)
+
+print ('Waiting')
+notifier.loop()

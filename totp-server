@@ -1,0 +1,49 @@
+#!/usr/bin/python
+
+import sys
+import os
+import socketserver
+import pyotp
+import gnupg
+import getpass
+
+
+secret_path = '/home/sss/PP.gpg'
+socket_path = os.path.join (os.environ['XDG_RUNTIME_DIR'], 'totp-socket')
+
+
+def read_secrets (password):
+    if not password:
+        print ('No password given; using dummy secrets.')
+        return {'dummy' : 'SZZ7XZGLU237VP3QRE4FU2PRSQGE3UE4'}
+    secrets = {}
+    gpg = gnupg.GPG()
+    data = str(gpg.decrypt_file(secret_path, passphrase=password))
+    for l in data.split('\n'):
+        ll = l.split()
+        if len(ll) >= 2 and ll[0].startswith('totp-'):
+            s = ''.join (ll[1:])
+            secrets[ll[0][5:]] = s.upper()
+    return secrets
+
+class Handler (socketserver.StreamRequestHandler):
+    def handle (self):
+        data = str(self.rfile.readline(1000), 'ascii').strip()
+        s = secrets.get (data)
+        if s:
+            otp = pyotp.TOTP(s).now()
+        else:
+            otp = 'key not found'
+        self.wfile.write (bytes (otp, 'ascii'))
+        return
+
+
+password = getpass.getpass ('Password: ')
+secrets = read_secrets (password)
+if not secrets:
+    print ('No keys read; bad password?')
+    sys.exit(1)
+os.umask (0o077)
+os.remove (socket_path)
+with socketserver.UnixStreamServer (socket_path, Handler) as server:
+    server.serve_forever()

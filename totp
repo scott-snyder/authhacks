@@ -1,0 +1,18 @@
+#!/usr/bin/python
+
+import os
+import socket
+import sys
+
+if len (sys.argv) != 2:
+    print (f'Usage: {sys.argv[0]} totp-id')
+    sys.exit(0)
+
+socket_path = os.path.join (os.environ['XDG_RUNTIME_DIR'], 'totp-socket')
+
+with socket.socket (socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+    sock.connect (socket_path)
+    sock.sendall (bytes(sys.argv[1] + '\n', 'ascii'))
+    r = str(sock.recv(1024), 'ascii')
+    print (r)
+
