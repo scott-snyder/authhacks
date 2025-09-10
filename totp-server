@@ -44,6 +44,7 @@ if not secrets:
     print ('No keys read; bad password?')
     sys.exit(1)
 os.umask (0o077)
-os.remove (socket_path)
+if os.path.exists (socket_path):
+    os.remove (socket_path)
 with socketserver.UnixStreamServer (socket_path, Handler) as server:
     server.serve_forever()
